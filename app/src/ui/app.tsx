@@ -18,7 +18,7 @@ import { updateStore, UpdateStatus } from './lib/update-store'
 import { RetryAction } from '../models/retry-actions'
 import { shouldRenderApplicationMenu } from './lib/features'
 import { matchExistingRepository } from '../lib/repository-matching'
-import { getDotComAPIEndpoint } from '../lib/api'
+import { getDotComAPIEndpoint, API } from '../lib/api'
 import { ILaunchStats } from '../lib/stats'
 import { getVersion, getName } from './lib/app-proxy'
 import { getOS } from '../lib/get-os'
@@ -143,6 +143,7 @@ import { SSHKeyPassphrase } from './ssh/ssh-key-passphrase'
 import { getMultiCommitOperationChooseBranchStep } from '../lib/multi-commit-operation'
 import { ConfirmForcePush } from './rebase/confirm-force-push'
 import { setAlmostImmediate } from '../lib/set-almost-immediate'
+import AliveSession, { AliveEvent } from '../lib/alive/alive-session'
 
 const MinuteInMilliseconds = 1000 * 60
 const HourInMilliseconds = MinuteInMilliseconds * 60
@@ -210,6 +211,10 @@ export class App extends React.Component<IAppProps, IAppState> {
   private getOnPopupDismissedFn = memoizeOne((popupType: PopupType) => {
     return () => this.onPopupDismissed(popupType)
   })
+
+  private desktopChannel: string | null = null
+  private aliveWebSocket: string | null = null
+  private aliveSession: AliveSession<App> | null = null
 
   public constructor(props: IAppProps) {
     super(props)
@@ -1295,6 +1300,69 @@ export class App extends React.Component<IAppProps, IAppState> {
   private onUpdateAvailableDismissed = () =>
     this.props.dispatcher.setUpdateBannerVisibility(false)
 
+  private doAliveStuff = async () => {
+    const account = this.getDotComAccount()
+    if (account === null) {
+      return
+    }
+    const api = API.fromAccount(account)
+    if (this.desktopChannel === null) {
+      this.desktopChannel = await api.getAliveDesktopChannel()
+    }
+    if (this.aliveWebSocket === null) {
+      this.aliveWebSocket = await api.getAliveWebSocket()
+    }
+
+    if (
+      this.aliveSession !== null ||
+      this.desktopChannel === null ||
+      this.aliveWebSocket === null
+    ) {
+      return
+    }
+
+    this.aliveSession = new AliveSession(
+      this.aliveWebSocket,
+      this.aliveWebSocket,
+      false,
+      this.notify
+    )
+
+    if (this.aliveSession === null) {
+      return
+    }
+
+    this.aliveSession.subscribe([
+      {
+        subscriber: this,
+        topic: {
+          name: 'desktop:user:2',
+          signed: this.desktopChannel,
+          offset: '',
+        },
+      },
+    ])
+
+    console.log('Subscribed to Alive channel!')
+  }
+
+  private notify = (subscribers: Iterable<App>, event: AliveEvent) => {
+    console.log('Alive event received:', event)
+
+    if (event.type !== 'message') {
+      return
+    }
+
+    const eventData = event.data as any
+
+    const notification = new remote.Notification({
+      title: 'Notification from Alive',
+      body: eventData.reason,
+    })
+
+    notification.show()
+  }
+
   private currentPopupContent(): JSX.Element | null {
     // Hide any dialogs while we're displaying an error
     if (this.state.errors.length) {
@@ -1392,6 +1460,8 @@ export class App extends React.Component<IAppProps, IAppState> {
         if (repository instanceof CloningRepository) {
           repository = null
         }
+
+        this.doAliveStuff()
 
         return (
           <Preferences

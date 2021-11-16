@@ -15,6 +15,7 @@ import username from 'username'
 import { GitProtocol } from './remote-parsing'
 import { Emitter } from 'event-kit'
 import JSZip from 'jszip'
+import { getGUID } from './stats'
 
 const envEndpoint = process.env['DESKTOP_GITHUB_DOTCOM_API_ENDPOINT']
 const envHTMLURL = process.env['DESKTOP_GITHUB_DOTCOM_HTML_URL']
@@ -69,8 +70,8 @@ interface IFetchAllOptions<T> {
   suppressErrors?: boolean
 }
 
-const ClientID = process.env.TEST_ENV ? '' : __OAUTH_CLIENT_ID__
-const ClientSecret = process.env.TEST_ENV ? '' : __OAUTH_SECRET__
+const ClientID = 'cb6183037d3f17417b8a' // process.env.TEST_ENV ? '' : __OAUTH_CLIENT_ID__
+const ClientSecret = '98e346547d729509fa8e154d92e4c0cdc00b9e8e' //process.env.TEST_ENV ? '' : __OAUTH_SECRET__
 
 if (!ClientID || !ClientID.length || !ClientSecret || !ClientSecret.length) {
   log.warn(
@@ -636,6 +637,14 @@ function toGitHubIsoDateString(date: Date) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z')
 }
 
+interface IAPIAliveSignedChannel {
+  readonly signed_channel: string
+}
+
+interface IAPIAliveWebSocket {
+  readonly url: string
+}
+
 /**
  * An object for making authenticated requests to the GitHub API
  */
@@ -664,6 +673,33 @@ export class API {
   public constructor(endpoint: string, token: string) {
     this.endpoint = endpoint
     this.token = token
+  }
+
+  public async getAliveDesktopChannel(): Promise<string | null> {
+    try {
+      const res = await this.request('GET', '/live/desktop-signed-channel')
+      const signedChannel = await parsedResponse<IAPIAliveSignedChannel>(res)
+      console.log('Alive channel info:', signedChannel)
+      return signedChannel.signed_channel
+    } catch (e) {
+      log.warn(`Alive channel request failed: ${e}`)
+      return null
+    }
+  }
+
+  public async getAliveWebSocket(): Promise<string | null> {
+    try {
+      const res = await this.request(
+        'GET',
+        `/live/websocket?session_id=${getGUID()}`
+      )
+      const websocket = await parsedResponse<IAPIAliveWebSocket>(res)
+      console.log('Alive socket info:', websocket)
+      return websocket.url
+    } catch (e) {
+      log.warn(`Alive channel request failed: ${e}`)
+      return null
+    }
   }
 
   /** Fetch a repo by its owner and name. */
