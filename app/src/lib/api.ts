@@ -360,6 +360,14 @@ export interface IAPIRefCheckRunCheckSuite {
   readonly id: number
 }
 
+export interface IAPICheckSuite {
+  readonly id: number
+  readonly rerequestable: boolean
+  readonly runs_rerequestable: boolean
+  readonly status: APICheckStatus
+  readonly created_at: string
+}
+
 export interface IAPIRefCheckRuns {
   readonly total_count: number
   readonly check_runs: IAPIRefCheckRun[]
@@ -485,6 +493,7 @@ export interface IAPIPullRequest {
   readonly user: IAPIIdentity
   readonly head: IAPIPullRequestRef
   readonly base: IAPIPullRequestRef
+  readonly body: string
   readonly state: 'open' | 'closed'
   readonly draft?: boolean
 }
@@ -1111,6 +1120,28 @@ export class API {
   }
 
   /**
+   * Gets a single check suite using its id
+   */
+  public async fetchCheckSuite(
+    owner: string,
+    name: string,
+    checkSuiteId: number
+  ): Promise<IAPICheckSuite | null> {
+    const path = `/repos/${owner}/${name}/check-suites/${checkSuiteId}`
+    const response = await this.request('GET', path)
+
+    try {
+      return await parsedResponse<IAPICheckSuite>(response)
+    } catch (_) {
+      log.debug(
+        `[fetchCheckSuite] Failed fetch check suite id ${checkSuiteId} (${owner}/${name})`
+      )
+    }
+
+    return null
+  }
+
+  /**
    * Get branch protection info to determine if a user can push to a given branch.
    *
    * Note: if request fails, the default returned value assumes full access for the user
@@ -1509,13 +1540,13 @@ export async function fetchMetadata(
 
 /** The note used for created authorizations. */
 async function getNote(): Promise<string> {
-  let localUsername = 'unknown'
-  try {
-    localUsername = await username()
-  } catch (e) {
+  let localUsername = await username()
+
+  if (localUsername === undefined) {
+    localUsername = 'unknown'
+
     log.error(
-      `getNote: unable to resolve machine username, using '${localUsername}' as a fallback`,
-      e
+      `getNote: unable to resolve machine username, using '${localUsername}' as a fallback`
     )
   }
 
