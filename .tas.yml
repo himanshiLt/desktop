@@ -1,22 +1,16 @@
----
-framework: jest                  # Mention the testing framework mocha or jest
-postMerge:
-    pattern:
-    - "./app/test/unit/git/**/*.ts" 
-    - "./app/test/unit/git/*.ts" 
-    - "./app/test/unit/stores/updates/*.ts" 
-    - "./app/test/unit/progess/*.ts" 
-    - "./app/test/unit/*.ts"            # Glob pattern to path where tests that should run post-merge are written
-preMerge:
-    pattern:
-    - "./app/test/unit/git/**/*.ts" 
-    - "./app/test/unit/git/*.ts" 
-    - "./app/test/unit/stores/updates/*.ts" 
-    - "./app/test/unit/progess/*.ts" 
-    - "./app/test/unit/*.ts"               # Glob pattern to path where tests that should run pre-merge are written
+framework: jest
+tier: large
 preRun:
-    - yarn install                   # Mention pre-run steps here
+  command:
+    - yarn install
+postMerge:
+  pattern:
+    - './app/test/unit/*.ts'
+preMerge:
+  pattern:
+    - './app/test/unit/*.ts'
 postRun:
-    - yarn --version                # Mention post-run steps here
-configFile: "./script/jest.config.js"
-version: 2.0
+  command:
+    - yarn --version
+configFile: './app/jest.unit.config.js'
+version: 1.0
